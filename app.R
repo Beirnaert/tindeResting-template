@@ -19,7 +19,7 @@ sqlitePath <- "swiperespons.sqlite"
 saveData <- function(input, output, iter) {
     
     data2 = cbind(iter, input$useRname, output[1,,drop = FALSE])
-    colnames(data2) = c("iter", "user", "swipe")
+    colnames(data2) = c("iter", "user", "index", "file", "swipe")
     
     db <- DBI::dbConnect(RSQLite::SQLite(), sqlitePath)
 
@@ -32,18 +32,17 @@ getHistory <- function(input) {
     historyfile = "./data/SwipeHistory.sqlite"
     if(file.exists(historyfile)){
             # new to me
-            historyfile = "./data/SwipeHistory.sqlite"
             Db <- DBI::dbConnect(RSQLite::SQLite(), historyfile)
             if(DBI::dbExistsTable(Db, name = "history")){
-                history_indexes <- as.integer(DBI::dbGetQuery(Db, paste("SELECT ind FROM history WHERE user='", as.character(input$useRname),"'", sep = "") )[[1]] )
+                history_names <- as.character(DBI::dbGetQuery(Db, paste("SELECT file FROM history WHERE user='", as.character(input$useRname),"'", sep = "") )[[1]] )
             } else{
-                history_indexes = NULL
+                history_names = NULL
             }
             DBI::dbDisconnect(Db)
     } else {
-        history_indexes = NULL
+        history_names = NULL
     }
-    return(history_indexes)
+    return(history_names)
 }
 
 OopsieDaisyRemoveDbEntry <- function(input, output, iter){
@@ -55,105 +54,34 @@ OopsieDaisyRemoveDbEntry <- function(input, output, iter){
     DBI::dbDisconnect(Db)
 }
 
-UpdateModelPredictions <- function(input, xtraVar){
-    
-    #step 1: get reviewed indexes and their swipe response 
-    historyfile = "./data/SwipeHistory.sqlite"
-    Db <- DBI::dbConnect(RSQLite::SQLite(), historyfile)
-    history_swipe_pos <- DBI::dbGetQuery(Db, "SELECT ind, swipe FROM history WHERE polarity='Pos' AND NatuRA=1" ) 
-    history_swipe_neg <- DBI::dbGetQuery(Db, "SELECT ind, swipe FROM history WHERE polarity='Neg' AND NatuRA=1" ) 
-    history_swipe_current <- DBI::dbGetQuery(Db, paste("SELECT ind FROM history WHERE polarity='",input$Polarity,"' AND NatuRA=1", sep = "") )
-    DBI::dbDisconnect(Db)
-    
-    history_swipe_pos <- history_swipe_pos[!duplicated(history_swipe_pos$ind) & history_swipe_pos$swipe != "Up", ]
-    history_swipe_neg <- history_swipe_neg[!duplicated(history_swipe_neg$ind) & history_swipe_neg$swipe != "Up", ]
-    
-    if (nrow(history_swipe_pos) > 0) rownames(history_swipe_pos) <- paste("Pos_", history_swipe_pos$ind, sep = "")  
-    if (nrow(history_swipe_neg) > 0) rownames(history_swipe_neg) <- paste("Neg_", history_swipe_neg$ind, sep = "") 
-    
-    #step 2: get the time profiles matching the indices of history_swipe to train the model
-    dat_pos <- read.table(file = "./data/shinyPosData.txt", sep = ",", header = TRUE)
-    dat_neg <- read.table(file = "./data/shinyNegData.txt", sep = ",", header = TRUE)
-    dat_current <- read.table(file = paste("./data/shiny",input$Polarity,"Data.txt",sep = ""), sep = ",", header = TRUE)
-    
-    trainingData_pos <- dat_pos[dat_pos$index %in% history_swipe_pos$ind ,]
-    if (nrow(trainingData_pos) > 0) rownames(trainingData_pos) <- paste("Pos_", trainingData_pos$index, sep = "") 
-    trainingData_neg <- dat_neg[dat_neg$index %in% history_swipe_neg$ind ,]
-    if (nrow(trainingData_neg) > 0) rownames(trainingData_neg) <- paste("Neg_", trainingData_neg$index, sep = "") 
-    # reorder to match with history_swipe
-    trainingData_pos <- trainingData_pos[match(history_swipe_pos$ind, trainingData_pos$index), (xtraVar+1):ncol(dat_pos)]
-    trainingData_neg <- trainingData_neg[match(history_swipe_neg$ind, trainingData_neg$index), (xtraVar+1):ncol(dat_neg)]
-    trainingData = rbind(trainingData_pos,trainingData_neg)
-    
-    trainingLabels_pos <- history_swipe_pos$swipe == "Right"
-    trainingLabels_neg <- history_swipe_neg$swipe == "Right"
-    trainingLabels = as.factor(c(trainingLabels_pos,trainingLabels_neg))
-    
-    RF.model <- randomForest::randomForest(x = trainingData,
-                                           y = trainingLabels, 
-                                           ntree = 500, 
-                                           importance = TRUE)
-    
-    # step 3: use model to predict unseen data
-    PredictData <- dat_current[dat_current$qSvsMB <= input$qValue & 
-                                   dat_current$qSvsNC <= input$qValue & 
-                                   !dat_current$index %in% history_swipe_current$ind, (xtraVar+1):ncol(dat_current)]
-    
-    if(any(!colnames(PredictData) == colnames(trainingData))){
-        stop("Something is wrong with the training data and testing data columns. They do not match properly.")
-    }
-    
-    predicted.probs <- stats::predict(object = RF.model, 
-                                      newdata = PredictData, 
-                                      type = "prob")[,2]
-    
-    # set the 'modelPredicted' variable of the Predicted Data to TRUE
-    dat_current$modelPredicted[dat_current$qSvsMB <= input$qValue & 
-                                   dat_current$qSvsNC <= input$qValue & 
-                               !dat_current$index %in% history_swipe_current$ind] <- TRUE
-    
-    # change the 'predictVal' variable of the Predicted Data to the corresponding probability
-    dat_current$predictVal[dat_current$qSvsMB <= input$qValue & 
-                               dat_current$qSvsNC <= input$qValue & 
-                           !dat_current$index %in% history_swipe_current$ind] <- as.numeric(predicted.probs)
-    # write the new data
-    write.table(dat_current, file = paste("./data/shiny",input$Polarity,"Data.txt",sep = ""), sep = ",")
-}
-
 
 ui <- fluidPage(
     headerPanel('This is the tindeResting template.'),
     sidebarLayout(
         sidebarPanel(
             fluidRow(
-                column(6,
-                       textInput("useRname", "Your name", "Mr Meeseeks")
-                ),
-                column(6, 
-                       radioButtons("Preference", "Preference", choiceNames = list(
-                           icon("github-alt"),
-                           icon("venus"),
-                           icon("mars")
-                       ),
-                       choiceValues = list(
-                           "kitten" , "female",  "male"
-                       ), 
-                       inline = TRUE
-                       )
+                column(8,
+                       textInput("useRname", "Your name", "Mr Meeseeks"),
+                       offset = 2
                 )
             ),
             fluidRow(
-                column(6,
-                       selectInput("onlyNew", "Only new images", c("yes" = "yes", "no" = "no"))
-                ),
-                column(6, selectInput("swipeOrder", "Swipe Order", c("Top first" = "tfrst", "Random" = "rnd")))
+                column(8,
+                       selectInput("onlyNew", "Only new images", c("yes" = "yes", "no" = "no")),
+                       offset = 2
+                )
             ),
             fluidRow(
-                column(6, actionButton("undo", 
+                column(8, selectInput("swipeOrder", "Swipe Order", c("Top first" = "tfrst", "Random" = "rnd")),
+                       offset = 2
+                       )
+            ),
+            fluidRow(
+                column(8, actionButton("undo", 
                                        "Oopsie daisy",  
                                        style="color:#fff; background-color:Crimson"),
                        align = "center", 
-                       offset = 0 ))
+                       offset = 2 ))
             
         ),
         mainPanel(
@@ -189,9 +117,10 @@ server <- function(input, output, session) {
     
     selection.vector <- reactive({
         # the getHistory function knows which selection is to be made (because we give it input): user or natura based
-        subset.selection <- rep(TRUE, length(list.files("data/images/")))
+        files <- list.files("data/images/")
+        subset.selection <- rep(TRUE, length(files))
         if(input$onlyNew == "yes"){
-            subset.selection[ getHistory(input) ] <- FALSE
+            subset.selection[ files %in% getHistory(input) ] <- FALSE
         }
         subset.selection = which(subset.selection)
         
@@ -204,8 +133,17 @@ server <- function(input, output, session) {
         subset.selection
     })
     
-    
-    
+    everything_reviewed <- reactive({
+        if (length(selection.vector()) < 1) {
+            showModal(
+                modalDialog(
+                    title = "No more images",
+                    "There are no more images for you to review. Either there are none in the 'images' subfoler or you have reviewed every single one.",
+                    easyClose = TRUE
+                )
+            )
+        }
+    })
     
     output$ReviewImage        <- renderImage({
         
@@ -234,6 +172,7 @@ server <- function(input, output, session) {
         #Record our last swipe results.
         appVals$swipes <- rbind(
             data.frame(index  = as.character(selection.vector()[as.numeric(appVals$k)]),
+                       file = list.files("data/images/")[selection.vector()[as.numeric(appVals$k)]],
                        swipe  = card_swipe()
             ),
             appVals$swipes
@@ -244,40 +183,26 @@ server <- function(input, output, session) {
         #update the quote
         appVals$k <-  appVals$k + 1 
         
-        
-        # if(appVals$k %% nswipeReward == 0){
-        #     nmales = length(list.files("www/male_celebs"))
-        #     nfemales = length(list.files("www/female_celebs"))
-        #     if(input$Preference == "male"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("male_celebs/male",sample(nmales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "kitten"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src="kat.gif", height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "female"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("female_celebs/fem",sample(nfemales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     }
-        # }
-        
+        if(appVals$k == length(selection.vector())){
+            showModal(modalDialog(
+                title = "No more images",
+                "This is the last image of the user's selection to be reviewed.",
+                easyClose = TRUE
+            ))
+        }
         
         saveData(input, appVals$swipes, appVals$k)
         
         #send update to the ui.
         output$index <- renderText({selection.vector()[as.numeric(appVals$k)]})
         
-        
     }) #close event observe.
+    
     observeEvent( input$buttonLeft,{
         #Record our last swipe results.
         appVals$swipes <- rbind(
             data.frame(index  = as.character(selection.vector()[as.numeric(appVals$k)]),
+                       file = list.files("data/images/")[selection.vector()[as.numeric(appVals$k)]],
                        swipe  = "Left"
             ),
             appVals$swipes
@@ -288,41 +213,26 @@ server <- function(input, output, session) {
         #update the quote
         appVals$k <-  appVals$k + 1 
         
-        
-        # if(appVals$k %% nswipeReward == 0){
-        #     nmales = length(list.files("www/male_celebs"))
-        #     nfemales = length(list.files("www/female_celebs"))
-        #     if(input$Preference == "male"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("male_celebs/male",sample(nmales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "kitten"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src="kat.gif", height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "female"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("female_celebs/fem",sample(nfemales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     }
-        # }
-        
+        if(appVals$k == length(selection.vector())){
+            showModal(modalDialog(
+                title = "No more images",
+                "This is the last image of the user's selection to be reviewed.",
+                easyClose = TRUE
+            ))
+        }
         
         saveData(input, appVals$swipes, appVals$k)
         
         #send update to the ui.
         output$index <- renderText({selection.vector()[as.numeric(appVals$k)]})
         
-        
-        
     }) #close event observe.
+    
     observeEvent( input$buttonUp,{
         #Record our last swipe results.
         appVals$swipes <- rbind(
-            data.frame(index  = as.character(dataSet()[dataSubset(),]$index[selection.vector()[as.numeric(appVals$k)]]),
+            data.frame(index  = as.character(selection.vector()[as.numeric(appVals$k)]),
+                       file = list.files("data/images/")[selection.vector()[as.numeric(appVals$k)]],
                        swipe  = "Up"
             ),
             appVals$swipes
@@ -333,38 +243,26 @@ server <- function(input, output, session) {
         #update the quote
         appVals$k <-  appVals$k + 1 
         
-        # if(appVals$k %% nswipeReward == 0){
-        #     nmales = length(list.files("www/male_celebs"))
-        #     nfemales = length(list.files("www/female_celebs"))
-        #     if(input$Preference == "male"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("male_celebs/male",sample(nmales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "kitten"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src="kat.gif", height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "female"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("female_celebs/fem",sample(nfemales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     }
-        # }
+        if(appVals$k == length(selection.vector())){
+            showModal(modalDialog(
+                title = "No more images",
+                "This is the last image of the user's selection to be reviewed.",
+                easyClose = TRUE
+            ))
+        }
         
         saveData(input, appVals$swipes, appVals$k)
         
         #send update to the ui.
         output$index <- renderText({selection.vector()[as.numeric(appVals$k)]})
         
-        
     }) #close event observe.
+    
     observeEvent( input$buttonRight,{
         #Record our last swipe results.
         appVals$swipes <- rbind(
-            data.frame(index  = as.character(dataSet()[dataSubset(),]$index[selection.vector()[as.numeric(appVals$k)]]),
+            data.frame(index  = as.character(selection.vector()[as.numeric(appVals$k)]),
+                       file = list.files("data/images/")[selection.vector()[as.numeric(appVals$k)]],
                        swipe  = "Right"
             ),
             appVals$swipes
@@ -375,30 +273,14 @@ server <- function(input, output, session) {
         #update the quote
         appVals$k <-  appVals$k + 1 
         
-        
-        # if(appVals$k %% nswipeReward == 0){
-        #     nmales = length(list.files("www/male_celebs"))
-        #     nfemales = length(list.files("www/female_celebs"))
-        #     if(input$Preference == "male"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("male_celebs/male",sample(nmales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "kitten"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src="kat.gif", height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     } else if(input$Preference == "female"){
-        #         showModal(modalDialog(
-        #             modalButton(label = img(src=paste("female_celebs/fem",sample(nfemales,1),".jpg", sep = ""), height = 300), icon = NULL),
-        #             easyClose = TRUE
-        #         ))
-        #     }
-        # }
-        
-        
-        
+        if(appVals$k == length(selection.vector())){
+            showModal(modalDialog(
+                title = "No more images",
+                "This is the last image of the user's selection to be reviewed.",
+                easyClose = TRUE
+            ))
+        }
+       
         saveData(input, appVals$swipes, appVals$k)
         
         #send update to the ui.
@@ -417,16 +299,6 @@ server <- function(input, output, session) {
             easyClose = TRUE
         ))
         
-    }) #close event observe.
-    observeEvent( input$ModelPredict,{
-        
-        showModal(modalDialog(
-            title = "Updating model predictions",
-            "The model predictions have been updated. You will no longer see time profiles that the model flagged as uninteresting.",
-            easyClose = TRUE
-        ))
-        
-        UpdateModelPredictions(input, xtraVar)
     }) #close event observe.
     
     session$onSessionEnded(function() {
