@@ -61,7 +61,7 @@ ui <- fluidPage(
         sidebarPanel(
             fluidRow(
                 column(8,
-                       textInput("useRname", "Your name", "Mr Meeseeks"),
+                       textInput("useRname", "Your name", "Louise"),
                        offset = 2
                 )
             ),
