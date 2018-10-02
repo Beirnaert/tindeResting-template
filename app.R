@@ -6,39 +6,35 @@ library(ggplot2)
 library(randomForest)
 library(stats)
 
-#file_extensions = tools::file_ext(list.files("data/"))
-
-#library(DBI)
-#library(RSQLite)
-#library(grid)
-
-
 sqlitePath <- "swiperespons.sqlite"
-
 
 saveData <- function(input, output, iter) {
     
-    data2 = cbind(iter, input$useRname, output[1,,drop = FALSE])
-    colnames(data2) = c("iter", "user", "index", "file", "swipe")
+    data2 = cbind(iter, input$useRname, output[1,,drop = FALSE], as.character(Sys.time()))
+    colnames(data2) = c("iter", "user", "index", "file", "swipe", "date")
     
     db <- DBI::dbConnect(RSQLite::SQLite(), sqlitePath)
-
-    DBI::dbWriteTable(db, name="swipes", value=data2, row.names=FALSE, append=TRUE)
+    
+    if(DBI::dbExistsTable(db, "swipes")){
+        DBI::dbWriteTable(db, name="swipes", value=data.frame(data2), row.names=FALSE, append=TRUE)
+    } else{
+        DBI::dbCreateTable(db, "swipes", data.frame(data2))
+        DBI::dbWriteTable(db, name="swipes", value=data.frame(data2), row.names=FALSE, append=TRUE)
+    }
     
     DBI::dbDisconnect(db)
 }
 
 getHistory <- function(input) {
-    historyfile = "./data/SwipeHistory.sqlite"
-    if(file.exists(historyfile)){
-            # new to me
-            Db <- DBI::dbConnect(RSQLite::SQLite(), historyfile)
-            if(DBI::dbExistsTable(Db, name = "history")){
-                history_names <- as.character(DBI::dbGetQuery(Db, paste("SELECT file FROM history WHERE user='", as.character(input$useRname),"'", sep = "") )[[1]] )
-            } else{
-                history_names = NULL
-            }
-            DBI::dbDisconnect(Db)
+    if(file.exists(sqlitePath)){
+        # new to me
+        Db <- DBI::dbConnect(RSQLite::SQLite(), sqlitePath)
+        if(DBI::dbExistsTable(Db, name = "swipes")){
+            history_names <- as.character(DBI::dbGetQuery(Db, paste("SELECT file FROM swipes WHERE user='", as.character(input$useRname),"'", sep = "") )[[1]] )
+        } else{ 
+            history_names = NULL
+        }
+        DBI::dbDisconnect(Db)
     } else {
         history_names = NULL
     }
@@ -74,7 +70,7 @@ ui <- fluidPage(
             fluidRow(
                 column(8, selectInput("swipeOrder", "Swipe Order", c("Top first" = "tfrst", "Random" = "rnd")),
                        offset = 2
-                       )
+                )
             ),
             fluidRow(
                 column(8, actionButton("undo", 
@@ -108,9 +104,6 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-    
-    # update data in the beginning, also do this when session ends to speed it up
-     source("app_data_updater.R")
     
     card_swipe <- callModule(shinyswipr, "quote_swiper")
     
@@ -156,7 +149,7 @@ server <- function(input, output, session) {
              width = 400,
              contentType = "image/jpeg",
              style="display: block; margin-left: auto; margin-right: auto; margin-top: auto; margin-bottom: auto;")
-
+        
     })
     ####
     output$resultsTable <- renderDataTable({appVals$swipes})
@@ -280,7 +273,7 @@ server <- function(input, output, session) {
                 easyClose = TRUE
             ))
         }
-       
+        
         saveData(input, appVals$swipes, appVals$k)
         
         #send update to the ui.
@@ -301,10 +294,6 @@ server <- function(input, output, session) {
         
     }) #close event observe.
     
-    session$onSessionEnded(function() {
-        source("app_data_updater.R")
-        
-    })
 }
 
 shinyApp(ui, server)
