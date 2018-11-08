@@ -109,7 +109,6 @@ server <- function(input, output, session) {
     
     
     selection.vector <- reactive({
-        # the getHistory function knows which selection is to be made (because we give it input): user or natura based
         files <- list.files("data/images/")
         subset.selection <- rep(TRUE, length(files))
         if(input$onlyNew == "yes"){
@@ -140,7 +139,7 @@ server <- function(input, output, session) {
     
     output$ReviewImage        <- renderImage({
         
-        input$useRname # to get the shit started
+        input$useRname
         kk <- selection.vector()[as.numeric(appVals$k)]
         Images <- list.files("data/images/")
         CurrentImage <- magick::image_read(paste("data/images/",Images[kk],sep=""))
