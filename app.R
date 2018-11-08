@@ -129,8 +129,8 @@ server <- function(input, output, session) {
         if (length(selection.vector()) < 1) {
             showModal(
                 modalDialog(
-                    title = "No more images",
-                    "There are no more images for you to review. Either there are none in the 'images' subfoler or you have reviewed every single one.",
+                    title = "Last image",
+                    "This is the last image for you to review.",
                     easyClose = TRUE
                 )
             )
