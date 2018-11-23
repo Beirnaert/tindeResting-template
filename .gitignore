@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+data/flower_images
+data/flower_images.zip
+data/flower_labels.csv
+Flower_workflow.R

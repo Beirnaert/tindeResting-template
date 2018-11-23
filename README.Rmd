@@ -1,20 +1,33 @@
+---
+output: github_document
+---
 
 <!-- README.md is generated from README.Rmd. -->
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  fig.path = "man/figures/README-",
+  message = FALSE,
+  warning = FALSE,
+  results = FALSE
+)
+```
+
 An easy template for the basic tindeResting app
 
-Overview
---------
+## Overview
 
-The tinderesting concept is analoguous to the recaptcha concept. The reviewer receives an image, the image is scored (in this case as interesting or not) and this information is used to train a machine learning model. Specifically a random forest model is trained, which is (hopefully) capable of emulating the decision process of the researcher.
+The tinderesting concept is analoguous to the recaptcha concept. The reviewer receives an image, the image is scored (in this case as interesting or not) and this information is used to train a machine learning model. Specifically a random forest model is trained, which is (hopefully) capable of emulating the decision process of the researcher. 
 
-In the corresponding tinderesting paper, the example deals with data analysis for dynamic (longitudinal/time-resolved) metabolomics data. However, to illustrate the general idea in a less convoluted way, let's look at some flowers.
+In the corresponding tinderesting paper, the example deals with data analysis for dynamic (longitudinal/time-resolved) metabolomics data. However, to illustrate the general idea in a less convoluted way, let's look at some flowers. 
 
-Installation
-------------
+
+## Installation
 
 The template itself is simply an R script, so there is no need to install, simply download it. However, there are a few packages required to run the shiny app:
 
-``` r
+```{r, results = FALSE}
 #install.packages("shiny")
 #install.packages("shinysense")
 #install.packages("ggplot2")
@@ -33,25 +46,25 @@ library(DBI)
 library(RSQLite)
 ```
 
-Flowers
--------
 
-Suppose we have a friend named Djoffert. Djoffert is very interested in roses but hates calendula flowers. He has received an old computer from his friend Benny which is filled with images of, you guessed it, roses and calendula flowers. Djoffert would like to find as much as possible roses, without having too look at all the calendula flowers.
+## Flowers
 
-To achieve this, clever Djoffert is going to use tinderesting. In the data folder there is a subfolder containing images of both flowers (This is a subset of the Kaggle flower dataset from Olga Belitskaya <https://www.kaggle.com/olgabelitskaya/flower-color-images/home>). Also in the data folder we find a .csv file containing the corresponding flower type for each images.
+Suppose we have a friend named Djoffert. Djoffert is very interested in roses but hates calendula flowers. He has received an old computer from his friend Benny which is filled with images of, you guessed it, roses and calendula flowers. Djoffert would like to find as much as possible roses, without having too look at all the calendula flowers. 
+
+To achieve this, clever Djoffert is going to use tinderesting. In the data folder there is a subfolder containing images of both flowers (This is a subset of the Kaggle flower dataset from Olga Belitskaya https://www.kaggle.com/olgabelitskaya/flower-color-images/home). Also in the data folder we find a .csv file containing the corresponding flower type for each images. 
 
 Djoffert's plan can be outlined as follows:
 
--   review half of the images with tinderesting (the training dataset, images need to be in the **data/tinderesting\_images** folder),
--   construct a random forest model based on the training data,
--   evaluate the performance on the other half of the images (testing data),
--   if the model is performant enough, use it on Benny's computer (This part is not actually done since Benny's computer is made up).
+* review half of the images with tinderesting (the training dataset, images need to be in the **data/tinderesting_images** folder),
+* construct a random forest model based on the training data,
+* evaluate the performance on the other half of the images (testing data),
+* if the model is performant enough, use it on Benny's computer (This part is not actually done since Benny's computer is made up).
 
 ### Step 0: training and testing data
 
-Put the images to be used in tinderesting in the **data/tinderesting\_images** folder.
+Put the images to be used in tinderesting in the **data/tinderesting_images** folder.
 
-``` r
+```{r files}
 # create and clean the dirs
 set.seed(1)
 
@@ -75,26 +88,32 @@ file.copy(from = paste("data/all_flowers/",flowers_meta$file[flowers_meta$train 
           to = "data/tinderesting_images")
 file.copy(from = paste("data/all_flowers/",flowers_meta$file[flowers_meta$train == FALSE],sep = ""), 
           to = "data/flowertesting")
+
+
 ```
+
 
 ### Step 1: run tinderesting
 
 Next we run the Shiny app and review the images. (This has been done already offline)
 
-``` r
+
+```{r tind, eval = FALSE}
 file.remove("swiperespons.sqlite")
 
 ## tinderesting step 2: review images
 shiny::runApp("app.R")
+
 ```
+
 
 ### Step 2: train machine learning model
 
-Now we get the results from tinderesting, which are stored in an sqlite file, and train the random forest model.
+Now we get the results from tinderesting, which are stored in an sqlite file, and train the random forest model. 
 
-It is important to note that the random forest model is not trained on the raw images. Rather, the randomm forest model receives the histograms of the red, green and blue layers (20 bins each).
+It is important to note that the random forest model is not trained on the raw images. Rather, the randomm forest model receives the histograms of the red, green and blue layers (20 bins each). 
 
-``` r
+```{r rfmod}
 
 sqlitePath <- "swiperespons.sqlite"
 db <- DBI::dbConnect(RSQLite::SQLite(), sqlitePath)
@@ -134,13 +153,14 @@ test_RBG = All_RBGdata[flowers_meta$train == FALSE,]
 
 RF_model <- randomForest::randomForest(x = train_RBG, 
                                        y = as.factor(swipeData$swipe == "Right"))
+
 ```
 
 ### Step 3: training and testing data
 
 Now let's evaluate the performance on the testing data.
 
-``` r
+```{r res, dpi = 400, fig.width = 4, fig.height = 4}
 
 ## Now let's evaluate the performance
 
@@ -157,8 +177,10 @@ flower_auc <- pROC::roc(response = test_labels,
                         predictor = predicted_probs,
                         plot = TRUE, 
                         print.auc = TRUE)
+
+
 ```
 
-![](man/figures/README-res-1.png)
 
-Djoffert's model is performing extremely well. The roc curve has an auc value of 0.967, a near perfect model. So the random forest model has learned to distinguis red and yellow roses from the orange calendula flowers.
+Djoffert's model is performing extremely well. The roc curve has an auc value of 0.967, a near perfect model. So the random forest model has learned to distinguis red and yellow roses from the orange calendula flowers. 
+

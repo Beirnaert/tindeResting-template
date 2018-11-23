@@ -254,7 +254,7 @@ server <- function(input, output, session) {
         #Record our last swipe results.
         appVals$swipes <- rbind(
             data.frame(index  = as.character(selection.vector()[as.numeric(appVals$k)]),
-                       file = list.files("data/images/")[selection.vector()[as.numeric(appVals$k)]],
+                       file = list.files("data/tinderesting_images/")[selection.vector()[as.numeric(appVals$k)]],
                        swipe  = "Right"
             ),
             appVals$swipes
