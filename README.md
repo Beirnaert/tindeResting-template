@@ -31,7 +31,12 @@ library(randomForest)
 library(stats)
 library(DBI)
 library(RSQLite)
+
+require(magick)
+
 ```
+
+The magick packages requires not only the installation of the package but also the ImageMagick software which can be found on imagemagick.org.
 
 Flowers
 -------
