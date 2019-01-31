@@ -49,7 +49,7 @@ require(magick)
 
 ```
 
-The magick packages requires not only the installation of the package but also the ImageMagick software which can be found on imagemagick.org.
+The magick packages (used by the tinderesting template app) requires not only the installation of the package but also the ImageMagick software which can be found on imagemagick.org.
 
 
 
@@ -58,6 +58,21 @@ The magick packages requires not only the installation of the package but also t
 
 Suppose we have a friend named Djoffert. Djoffert is very interested in roses but hates calendula flowers. He has received an old computer from his friend Benny which is filled with images of, you guessed it, roses and calendula flowers. Djoffert would like to find as much as possible roses, without having too look at all the calendula flowers. 
 
+<center>
+<img align="left" img width="24%" src="data/tinderesting_images/0045.png"/>
+<img align="left" img width="24%" src="data/tinderesting_images/0050.png"/>
+<img align="right" img width="24%" src="data/tinderesting_images/0003.png"/>
+<img align="right" img width="24%" src="data/tinderesting_images/0039.png"/>
+</center>
+
+<p style="text-align: center; font-style: italic;" >
+Djoffert likes the roses on the left but hates the calendula on the right
+</p>
+
+
+
+
+
 To achieve this, clever Djoffert is going to use tinderesting. In the data folder there is a subfolder containing images of both flowers (This is a subset of the Kaggle flower dataset from Olga Belitskaya https://www.kaggle.com/olgabelitskaya/flower-color-images/home). Also in the data folder we find a .csv file containing the corresponding flower type for each images. 
 
 Djoffert's plan can be outlined as follows:
@@ -65,7 +80,7 @@ Djoffert's plan can be outlined as follows:
 * review half of the images with tinderesting (the training dataset, images need to be in the **data/tinderesting_images** folder),
 * construct a random forest model based on the training data,
 * evaluate the performance on the other half of the images (testing data),
-* if the model is performant enough, use it on Benny's computer (This part is not actually done since Benny's computer is made up).
+* if the model is performant enough, use it on Benny's computer (this step is not actually done since Benny's computer is made up).
 
 ### Step 0: training and testing data
 
